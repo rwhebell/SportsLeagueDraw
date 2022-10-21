@@ -1,22 +1,30 @@
 
-nt = 10
-nr = 18
-nc = 5
+randomSeed = 0
+
+nt = 10 # number of teams
+nr = 18 # number of rounds (ideally = (nt-1)/2)
+nc = 5 # number of courts (right now this is restricted to equal nt/2)
+
+courtNames = "Court " .* string.(2:6)
+courtTypes = ["Hard", "Hard", "SynGrass", "SynGrass", "Court6"]
+courtTypeRanges = [ 1:2, 3:4, 5:5 ]
+
+ncourtTypes = length(courtTypeRanges)
+desiredMatches = nr / nc .* length.(courtTypeRanges)
 
 # How many rounds to wait to replay the same team
 # e.g., play same team in rounds 1 and 10? That's a closeness of 9
+# Optimal value is nt-1
 replayCloseness = nt-1
 
 # Have a T-round break from court 6 after you've played on it
+# (this is application-specific)
 T = 3
 
 # Maximum of p rounds on a surface in any given q rounds
 p = 1
 q = 1
 
-courtTypeRanges = [ 1:2, 3:4, 5:5 ]
-ncourtTypes = length(courtTypeRanges)
-desiredMatches = nr / nc .* length.(courtTypeRanges)
 
 # Set already played rounds in stone
 playedDraw = [
@@ -96,8 +104,8 @@ end
 # Maximum of p rounds on a surface in any given q rounds
 for n in 1:ncourtTypes
     @constraint(model,
-        [i in 1:nt, R in 1:nr-q],
-        sum( x[i,j,k,r] for j in 1:nt, k = courtTypeRanges[n], r in R:R+q) <= p
+        [i in 1:nt, R in 1:nr-q+1],
+        sum( x[i,j,k,r] for j in 1:nt, k = courtTypeRanges[n], r in R:R+q-1) <= p
     )
 end
 
@@ -123,6 +131,8 @@ end
 
 # Solve the dang thing
 set_optimizer_attribute(model, "maxSolutions", 1)
+set_optimizer_attribute(model, "randomSeed", randomSeed)
+set_optimizer_attribute(model, "randomCbcSeed", randomSeed)
 optimize!(model)
 termination_status(model)
 
@@ -138,107 +148,12 @@ for i in 1:nt, j in 1:nt, k in 1:nc, r in 1:nr
     end
 end
 
-function analyseDraw(draw, courtTypes)
-
-    numRounds, numCourts = size(draw)
-    numTeams = 2*numCourts
-    
-    homeCounts = zeros(Int, numTeams)
-    head2headCounts = zeros(Int, numTeams, numTeams)
-    head2headRounds = [ Int[] for i in 1:numTeams, j in 1:numTeams ]
-    roundsOnSurface = [ Dict([c => Int[] for c in courtTypes]) for _ in 1:numTeams ]
-    courtCounts = [ Dict([c => 0 for c in courtTypes]) for _ in 1:numTeams ]
-
-    for roundNum in axes(draw, 1)
-        for courtNum in axes(draw, 2)
-
-            teams = draw[roundNum, courtNum]
-
-            homeCounts[teams[1]] += 1
-
-            head2headCounts[teams[1], teams[2]] += 1
-            head2headCounts[teams[2], teams[1]] += 1
-
-            push!(head2headRounds[teams[1], teams[2]], roundNum)
-            push!(head2headRounds[teams[2], teams[1]], roundNum)
-
-            courtCounts[teams[1]][courtTypes[courtNum]] += 1
-            courtCounts[teams[2]][courtTypes[courtNum]] += 1
-
-            push!(roundsOnSurface[teams[1]][courtTypes[courtNum]], roundNum)
-            push!(roundsOnSurface[teams[2]][courtTypes[courtNum]], roundNum)
-
-        end
-    end
-
-    maxConsecutiveSurfaces = zeros(Int, numTeams)
-    for t in 1:numTeams
-
-        roundsOnSurface_t = roundsOnSurface[t]
-        streak = 1
-        maxStreak = 1
-        for surface in keys(roundsOnSurface_t)
-            rounds = roundsOnSurface_t[surface]
-            (length(rounds) == 1) && continue
-            for i in 2:length(rounds)
-                if (rounds[i] - rounds[i-1]) == 1
-                    streak += 1
-                    maxStreak = max(maxStreak, streak)
-                else
-                    streak = 1
-                end
-            end
-        end
-        maxConsecutiveSurfaces[t] = maxStreak
-
-    end
-
-    sort!.(head2headRounds)
-    minReplayGaps = [ minimum(diff(head2headRounds[i,j]), init=Inf) for i in 1:numTeams, j in 1:numTeams ]
-    minReplayGap = minimum(minReplayGaps)
-
-    analysis = (
-        homeCounts = homeCounts,
-        head2headCounts = head2headCounts,
-        minReplayGaps = minReplayGaps,
-        minReplayGap = minReplayGap,
-        courtCounts = courtCounts,
-        roundsOnSurface = roundsOnSurface,
-        maxConsecutiveSurfaces = maxConsecutiveSurfaces
-    )
-
-    println()
-    println("How many times does each team play on each surface?")
-    for t = 1:numTeams
-        print("Team $t: ")
-        println(courtCounts[t])
-    end
-
-    println()
-    println("How many times does team i play team j?")
-    display(head2headCounts)
-
-    println()
-    println("How many rounds does team i wait to replay team j?")
-    display(minReplayGaps)
-    println("Minimum: $minReplayGap rounds")
-
-    println()
-    println("Maximum number of consecutive rounds on any one surface:")
-    display(maxConsecutiveSurfaces)
-    println()
-    println("Maximum: $(maximum(maxConsecutiveSurfaces)) consecutive rounds")
-
-    return analysis
-
-end
-
-courtTypes = ["Hard", "Hard", "SynGrass", "SynGrass", "Court6"]
+include("analyseDraw.jl")
 
 analysis = analyseDraw(draw, courtTypes)
 
 println()
-println("The draw: (rows are rounds, columns are courts 2 through 6)")
+println("The draw: (rows are rounds, columns are courts)")
 display(draw)
 
 println()
@@ -248,8 +163,6 @@ println()
 
 
 ##
-
-courtNames = "Court " .* string.(2:6)
 
 using CSV
 using DataFrames
