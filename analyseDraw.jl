@@ -35,9 +35,9 @@ function analyseDraw(draw, courtTypes)
     for t in 1:numTeams
 
         roundsOnSurface_t = roundsOnSurface[t]
-        streak = 1
         maxStreak = 1
         for surface in keys(roundsOnSurface_t)
+            streak = 1
             rounds = roundsOnSurface_t[surface]
             (length(rounds) == 1) && continue
             for i in 2:length(rounds)
