@@ -1,5 +1,5 @@
 
-randomSeed = 0
+randomSeed = 99
 
 nt = 10 # number of teams
 nr = 18 # number of rounds (ideally = (nt-1)/2)
@@ -22,14 +22,15 @@ replayCloseness = nt-1
 T = 3
 
 # Maximum of p rounds on a surface in any given q rounds
-p = 1
-q = 1
+p = 3
+q = 4
 
 
 # Set already played rounds in stone
 playedDraw = [
-    [[2,1], [6,7], [4,9], [5,8], [3,10]]' ;
-    [[10,4], [2,3], [8,6], [9, 5], [1, 7]]'
+    [[1,2], [3,10], [4,9], [5,8], [6,7]]' ;
+    [[4,10], [1,7], [6,8], [5,9], [2,3]]' ;
+    [[1,4], [7,9], [3,5], [2,6], [8,10]]'
 ] .|> collect
 
 
@@ -122,15 +123,16 @@ for n in 1:ncourtTypes
 end
 
 
-# Then minimise the additional number of matches played on each surface after that
+# No objective, just find a feasible solution
 @objective(model,
     Min,
     1.0
 )
 
+display(model)
+
 
 # Solve the dang thing
-set_optimizer_attribute(model, "maxSolutions", 1)
 set_optimizer_attribute(model, "randomSeed", randomSeed)
 set_optimizer_attribute(model, "randomCbcSeed", randomSeed)
 optimize!(model)
